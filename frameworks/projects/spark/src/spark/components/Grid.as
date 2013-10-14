@@ -11,7 +11,6 @@
 //
 //  Unless required by applicable law or agreed to in writing, software
 //  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
@@ -42,10 +41,10 @@ import mx.utils.ObjectUtil;
 
 import spark.collections.SubListView;
 import spark.components.gridClasses.CellPosition;
-import spark.components.gridClasses.GridDoubleClickMode;
 import spark.components.gridClasses.GridColumn;
 import spark.components.gridClasses.GridDimensions;
 import spark.components.gridClasses.GridDimensionsView;
+import spark.components.gridClasses.GridDoubleClickMode;
 import spark.components.gridClasses.GridLayout;
 import spark.components.gridClasses.GridSelection;
 import spark.components.gridClasses.GridSelectionMode;
@@ -269,8 +268,6 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
      *  rowIndex of the caret after a collection refresh event.
      */    
     private var caretSelectedItem:Object = null;
-    private var updateCaretForDataProviderChanged:Boolean = false;
-    private var updateCaretForDataProviderChangeLastEvent:CollectionEvent;
     
     /**
      *  @private
@@ -1269,9 +1266,9 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
     
     /**
      *  The doubleClick mode of the control.  Possible values are:
-     *  <code>GridDoubleClickMode.CELL</code>, 
-     *  <code>GridDoubleClickMode.GRID</code>, 
-     *  <code>GridDoubleClickMode.ROW</code>, 
+     *  <code>GridSelectionMode.CELL</code>, 
+     *  <code>GridSelectionMode.GRID</code>, 
+     *  <code>GridSelectionMode.ROW</code>, 
      * 
      *  <p>Changing the doubleClickMode changes the double click
      *  criteria for firing the doubleClick event</p>
@@ -3521,6 +3518,10 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         if (invalidatePropertiesFlag)
             UIComponentGlobals.layoutManager.validateClient(this, false);
         
+        var firstCell:CellPosition = null;
+        if (valueCopy.length > 0)
+            firstCell = valueCopy[0] as CellPosition;
+        
         gridSelection.removeAll();
         for each (var cell:CellPosition in valueCopy)
         {
@@ -3529,6 +3530,12 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         
         doFinalizeSetSelection(cell ? cell.rowIndex : -1, 
                                cell ? cell.columnIndex : -1);
+        
+        if (firstCell != null)
+        {
+            anchorRowIndex = firstCell.rowIndex;
+            anchorColumnIndex = firstCell.columnIndex;
+        }
     }
     
     /**
@@ -3542,6 +3549,10 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         if (invalidatePropertiesFlag)
             UIComponentGlobals.layoutManager.validateClient(this, false);
         
+        var firstRowIndex:int = -1;
+        if (valueCopy.length > 0)
+            firstRowIndex = valueCopy[0] as int;
+        
         var newRowIndex:int = -1;
         gridSelection.removeAll();
         for each (newRowIndex in valueCopy)
@@ -3550,6 +3561,9 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         }
         
         doFinalizeSetSelection(newRowIndex, -1);
+        
+        if (firstRowIndex >= 0)
+            anchorRowIndex = firstRowIndex;
     }
 
     /**
@@ -3566,6 +3580,10 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         if (invalidatePropertiesFlag)
             UIComponentGlobals.layoutManager.validateClient(this, false);
         
+        var firstRowIndex:int = -1;
+        if (valueCopy.length > 0)
+            firstRowIndex = dataProvider.getItemIndex(valueCopy[0]);
+        
         var newRowIndex:int = -1;        
         gridSelection.removeAll();
         for each (var item:Object in valueCopy)
@@ -3575,6 +3593,9 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         }
         
         doFinalizeSetSelection(newRowIndex, -1);
+        
+        if (firstRowIndex >= 0)
+            anchorRowIndex = firstRowIndex;
     }
     
     /**
@@ -4601,12 +4622,7 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         clearInvalidateDisplayListReasons = true;
 		
 		if (!variableRowHeight)
-			setFixedRowHeight(gridDimensions.getRowHeight(0));
-        if (updateCaretForDataProviderChanged){
-            updateCaretForDataProviderChanged = false;
-            updateCaretForDataProviderChange(updateCaretForDataProviderChangeLastEvent);
-            updateCaretForDataProviderChangeLastEvent = null;
-        }
+			setFixedRowHeight(gridDimensions.getRowHeight(0));    
 	}
         
     //--------------------------------------------------------------------------
@@ -5452,8 +5468,8 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
                 // No caret item so reset caret and vsp.
                 else 
                 {
-                    caretRowIndex = _dataProvider.length > 0 ? 0 : -1;
-                   verticalScrollPosition = 0;
+                    caretRowIndex = _dataProvider.length > 0 ? 0 : -1; 
+                    verticalScrollPosition = 0;
                 }
                 
                 break;
@@ -5626,18 +5642,8 @@ public class Grid extends Group implements IDataGridElement, IDataProviderEnhanc
         invalidateSize();
         invalidateDisplayList();
         
-        if (caretRowIndex != -1)  {
-            if (event.kind == CollectionEventKind.RESET){
-                // defer for reset events 
-                updateCaretForDataProviderChanged = true;
-                updateCaretForDataProviderChangeLastEvent = event;
-                invalidateDisplayList(); 
-            }
-            else {
-                updateCaretForDataProviderChange(event);
-            }         
-        }
-
+        if (caretRowIndex != -1)
+            updateCaretForDataProviderChange(event);
         
         // Trigger bindings to selectedIndex/selectedCell/selectedItem and the plurals of those.
         if (selectionChanged)
